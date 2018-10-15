@@ -44,6 +44,17 @@ services:
       - "./m3aggregator.yml:/etc/m3aggregator/m3aggregator.yml"
     environment:
       - M3AGGREGATOR_HOST_ID=m3aggregator01
+  m3aggregator02:
+    networks:
+      - backend
+    build:
+      context: ../../../
+      dockerfile: ./docker/m3aggregator/Dockerfile
+    image: m3aggregator02:latest
+    volumes:
+      - "./m3aggregator.yml:/etc/m3aggregator/m3aggregator.yml"
+    environment:
+      - M3AGGREGATOR_HOST_ID=m3aggregator02
   m3coordinator01:
     expose:
       - "7201"

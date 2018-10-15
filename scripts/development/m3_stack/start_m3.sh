@@ -24,6 +24,7 @@ fi
 if [[ "$AGGREGATOR_PIPELINE" = true ]]; then
     echo "Running aggregator pipeline"
     docker-compose -f docker-compose.yml up $DOCKER_ARGS m3aggregator01
+    docker-compose -f docker-compose.yml up $DOCKER_ARGS m3aggregator02
     docker-compose -f docker-compose.yml up $DOCKER_ARGS m3collector01
 else
     echo "Not running aggregator pipeline"
@@ -148,8 +149,8 @@ echo "Done validating topology"
 
 if [[ "$AGGREGATOR_PIPELINE" = true ]]; then
     curl -vvvsSf -X POST localhost:7201/api/v1/services/m3aggregator/placement/init -d '{
-        "num_shards": 64,
-        "replication_factor": 1,
+        "num_shards": 4,
+        "replication_factor": 2,
         "instances": [
             {
                 "id": "m3aggregator01:6000",
@@ -158,6 +159,15 @@ if [[ "$AGGREGATOR_PIPELINE" = true ]]; then
                 "weight": 1024,
                 "endpoint": "m3aggregator01:6000",
                 "hostname": "m3aggregator01",
+                "port": 6000
+            },
+            {
+                "id": "m3aggregator02:6000",
+                "isolation_group": "rack-b",
+                "zone": "embedded",
+                "weight": 1024,
+                "endpoint": "m3aggregator02:6000",
+                "hostname": "m3aggregator02",
                 "port": 6000
             }
         ]
