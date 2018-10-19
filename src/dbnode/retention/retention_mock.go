@@ -221,3 +221,27 @@ func (m *MockOptions) BlockDataExpiryAfterNotAccessedPeriod() time.Duration {
 func (mr *MockOptionsMockRecorder) BlockDataExpiryAfterNotAccessedPeriod() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BlockDataExpiryAfterNotAccessedPeriod", reflect.TypeOf((*MockOptions)(nil).BlockDataExpiryAfterNotAccessedPeriod))
 }
+
+// SetOutOfOrderWritesEnabled mocks base method
+func (m *MockOptions) SetOutOfOrderWritesEnabled(value bool) Options {
+	ret := m.ctrl.Call(m, "SetOutOfOrderWritesEnabled", value)
+	ret0, _ := ret[0].(Options)
+	return ret0
+}
+
+// SetOutOfOrderWritesEnabled indicates an expected call of SetOutOfOrderWritesEnabled
+func (mr *MockOptionsMockRecorder) SetOutOfOrderWritesEnabled(value interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetOutOfOrderWritesEnabled", reflect.TypeOf((*MockOptions)(nil).SetOutOfOrderWritesEnabled), value)
+}
+
+// OutOfOrderWritesEnabled mocks base method
+func (m *MockOptions) OutOfOrderWritesEnabled() bool {
+	ret := m.ctrl.Call(m, "OutOfOrderWritesEnabled")
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// OutOfOrderWritesEnabled indicates an expected call of OutOfOrderWritesEnabled
+func (mr *MockOptionsMockRecorder) OutOfOrderWritesEnabled() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OutOfOrderWritesEnabled", reflect.TypeOf((*MockOptions)(nil).OutOfOrderWritesEnabled))
+}

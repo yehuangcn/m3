@@ -22,7 +22,6 @@ package series
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"testing"
 	"time"
@@ -109,24 +108,10 @@ func TestSeriesWriteFlush(t *testing.T) {
 		ctx.Close()
 	}
 
-	assert.Equal(t, true, series.buffer.NeedsDrain())
-
-	// Tick the series which should cause a drain
-	_, err = series.Tick()
-	assert.NoError(t, err)
-
-	assert.Equal(t, false, series.buffer.NeedsDrain())
-
-	blocks := series.blocks.AllBlocks()
-	assert.Len(t, blocks, 1)
-
-	block, ok := series.blocks.BlockAt(start)
-	assert.Equal(t, true, ok)
-
 	ctx := context.NewContext()
 	defer ctx.Close()
 
-	stream, err := block.Stream(ctx)
+	stream, err := series.buffer.Stream(ctx, realtimeType, start)
 	require.NoError(t, err)
 	assertValuesEqual(t, data[:2], [][]xio.BlockReader{[]xio.BlockReader{
 		stream,
@@ -148,8 +133,8 @@ func TestSeriesWriteFlushRead(t *testing.T) {
 		{curr.Add(mins(1)), 2, xtime.Second, nil},
 		{curr.Add(mins(3)), 3, xtime.Second, nil},
 		{curr.Add(mins(5)), 4, xtime.Second, nil},
-		{curr.Add(mins(7)), 4, xtime.Second, nil},
-		{curr.Add(mins(9)), 4, xtime.Second, nil},
+		{curr.Add(mins(7)), 5, xtime.Second, nil},
+		{curr.Add(mins(9)), 6, xtime.Second, nil},
 	}
 
 	for _, v := range data {
@@ -205,17 +190,19 @@ func TestSeriesFlush(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	curr := time.Unix(7200, 0)
 	opts := newSeriesTestOptions()
+	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
+		return curr
+	}))
 	series := NewDatabaseSeries(ident.StringID("foo"), ident.Tags{}, opts).(*dbSeries)
+
 	_, err := series.Bootstrap(nil)
 	assert.NoError(t, err)
-	flushTime := time.Unix(7200, 0)
-	head := checked.NewBytes([]byte{0x1, 0x2}, nil)
-	tail := checked.NewBytes([]byte{0x3, 0x4}, nil)
 
-	block := opts.DatabaseBlockOptions().DatabaseBlockPool().Get()
-	block.Reset(flushTime, time.Hour, ts.NewSegment(head, tail, ts.FinalizeNone))
-	series.blocks.AddBlock(block)
+	ctx := context.NewContext()
+	series.buffer.Write(ctx, curr, 1234, xtime.Second, nil)
+	ctx.BlockingClose()
 
 	inputs := []error{errors.New("some error"), nil}
 	for _, input := range inputs {
@@ -223,7 +210,7 @@ func TestSeriesFlush(t *testing.T) {
 			return input
 		}
 		ctx := context.NewContext()
-		outcome, err := series.Flush(ctx, flushTime, persistFn)
+		outcome, err := series.Flush(ctx, curr, persistFn)
 		ctx.BlockingClose()
 		require.Equal(t, input, err)
 		if input == nil {
@@ -477,51 +464,6 @@ func TestSeriesTickCacheNone(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 0, tickResult.UnwiredBlocks)
 	require.Equal(t, 1, tickResult.PendingMergeBlocks)
-}
-
-func TestSeriesBootstrapWithError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	opts := newSeriesTestOptions()
-	now := time.Now()
-	blockSize := 2 * time.Hour
-
-	series := NewDatabaseSeries(ident.StringID("foo"), ident.Tags{}, opts).(*dbSeries)
-
-	bufferMin := now.Truncate(blockSize).Add(-blockSize)
-	bufferMax := now.Truncate(blockSize).Add(2 * blockSize)
-
-	buffer := NewMockdatabaseBuffer(ctrl)
-	buffer.EXPECT().DrainAndReset()
-	buffer.EXPECT().MinMax().Return(bufferMin, bufferMax, nil)
-	series.buffer = buffer
-
-	errBlockStart := bufferMin
-	blocks := block.NewDatabaseSeriesBlocks(0)
-
-	// Add block that buffer will fail to bootstrap
-	bl := block.NewMockDatabaseBlock(ctrl)
-	bl.EXPECT().StartTime().Return(errBlockStart).AnyTimes()
-	blocks.AddBlock(bl)
-
-	// Add block that will succeed
-	bl = block.NewMockDatabaseBlock(ctrl)
-	bl.EXPECT().StartTime().Return(bufferMin.Add(-blockSize)).AnyTimes()
-	bl.EXPECT().SetOnEvictedFromWiredList(nil)
-	blocks.AddBlock(bl)
-
-	// Expect to fail the bootstrap for block destined for buffer
-	buffer.EXPECT().Bootstrap(bl).Return(fmt.Errorf("bar"))
-
-	_, err := series.Bootstrap(blocks)
-	assert.Error(t, err)
-
-	str := fmt.Sprintf("bootstrap series error occurred for %s block at %s: %s",
-		series.ID().String(), errBlockStart.String(), "bar")
-	require.Equal(t, str, err.Error())
-	require.Equal(t, bootstrapped, series.bs)
-	require.Equal(t, 1, series.blocks.Len())
 }
 
 func TestSeriesFetchBlocks(t *testing.T) {
