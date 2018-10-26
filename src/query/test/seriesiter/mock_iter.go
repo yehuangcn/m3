@@ -106,6 +106,7 @@ func NewMockSeriesIters(
 			}
 		}
 	}).AnyTimes()
+	mockIters.EXPECT().Pool().Return(nil).AnyTimes()
 
 	return mockIters
 }

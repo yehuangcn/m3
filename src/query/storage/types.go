@@ -25,6 +25,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	"github.com/m3db/m3/src/query/block"
 	"github.com/m3db/m3/src/query/models"
 	"github.com/m3db/m3/src/query/ts"
@@ -80,6 +82,7 @@ func (q *FetchQuery) String() string {
 type FetchOptions struct {
 	Limit    int
 	KillChan chan struct{}
+	Enforcer *cost.Enforcer
 }
 
 // Querier handles queries against a storage.

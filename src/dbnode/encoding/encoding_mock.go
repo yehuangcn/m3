@@ -835,6 +835,18 @@ func (mr *MockSeriesIteratorsMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockSeriesIterators)(nil).Close))
 }
 
+// Pool mocks base method
+func (m *MockSeriesIterators) Pool() MutableSeriesIteratorsPool {
+	ret := m.ctrl.Call(m, "Pool")
+	ret0, _ := ret[0].(MutableSeriesIteratorsPool)
+	return ret0
+}
+
+// Pool indicates an expected call of Pool
+func (mr *MockSeriesIteratorsMockRecorder) Pool() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pool", reflect.TypeOf((*MockSeriesIterators)(nil).Pool))
+}
+
 // MockMutableSeriesIterators is a mock of MutableSeriesIterators interface
 type MockMutableSeriesIterators struct {
 	ctrl     *gomock.Controller
@@ -890,6 +902,18 @@ func (m *MockMutableSeriesIterators) Close() {
 // Close indicates an expected call of Close
 func (mr *MockMutableSeriesIteratorsMockRecorder) Close() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockMutableSeriesIterators)(nil).Close))
+}
+
+// Pool mocks base method
+func (m *MockMutableSeriesIterators) Pool() MutableSeriesIteratorsPool {
+	ret := m.ctrl.Call(m, "Pool")
+	ret0, _ := ret[0].(MutableSeriesIteratorsPool)
+	return ret0
+}
+
+// Pool indicates an expected call of Pool
+func (mr *MockMutableSeriesIteratorsMockRecorder) Pool() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Pool", reflect.TypeOf((*MockMutableSeriesIterators)(nil).Pool))
 }
 
 // Reset mocks base method

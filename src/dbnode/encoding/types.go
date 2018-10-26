@@ -213,6 +213,9 @@ type SeriesIterators interface {
 
 	// Close closes all iterators contained
 	Close()
+
+	// Pool returns the pool instance used for this SeriesIterators
+	Pool() MutableSeriesIteratorsPool
 }
 
 // MutableSeriesIterators is a mutable SeriesIterators

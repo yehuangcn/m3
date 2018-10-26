@@ -90,6 +90,8 @@ func (h *PromReadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx := context.WithValue(r.Context(), handler.HeaderKey, r.Header)
 	logger := logging.WithContext(ctx)
 
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	params, rErr := parseParams(r)
 	if rErr != nil {
 		xhttp.Error(w, rErr.Inner(), rErr.Code())
@@ -114,7 +116,7 @@ func (h *PromReadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Support multiple result types
 	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+
 	renderResultsJSON(w, result, params)
 }
 
