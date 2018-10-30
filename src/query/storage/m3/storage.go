@@ -92,8 +92,7 @@ func (s *m3storage) Fetch(
 
 	enforcer := options.Enforcer
 	if enforcer == nil {
-		ef := cost.NoopEnforcer()
-		enforcer = &ef
+		enforcer = cost.NoopEnforcer()
 	}
 	for i, iter := range iters {
 		accountedIters[i] = NewAccountedSeriesIter(iter, enforcer)

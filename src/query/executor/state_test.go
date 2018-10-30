@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	"github.com/m3db/m3/src/query/functions"
 	"github.com/m3db/m3/src/query/functions/aggregation"
 	"github.com/m3db/m3/src/query/models"
@@ -57,7 +59,7 @@ func TestValidState(t *testing.T) {
 	state, err := GenerateExecutionState(p, store)
 	require.NoError(t, err)
 	require.Len(t, state.sources, 1)
-	err = state.Execute(context.Background())
+	err = state.Execute(context.Background(), models.NewQueryContext(cost.NoopEnforcer()))
 	assert.NoError(t, err)
 }
 

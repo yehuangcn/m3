@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	"github.com/m3db/m3/src/cmd/services/m3query/config"
 	"github.com/m3db/m3/src/query/block"
 	"github.com/m3db/m3/src/query/executor"
@@ -88,7 +90,7 @@ func newTestSetup() *testSetup {
 	return &testSetup{
 		Storage: mockStorage,
 		Handler: NewPromReadHandler(
-			executor.NewEngine(mockStorage, tally.NewTestScope("test", nil)),
+			executor.NewEngine(mockStorage, tally.NewTestScope("test", nil), cost.NoopEnforcer()),
 			models.NewTagOptions(),
 			&config.LimitsConfiguration{},
 		),

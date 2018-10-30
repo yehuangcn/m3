@@ -24,6 +24,8 @@ import (
 	"context"
 	"time"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	"github.com/m3db/m3/src/query/models"
 	"github.com/m3db/m3/src/query/parser"
 	"github.com/m3db/m3/src/query/storage"
@@ -34,9 +36,10 @@ import (
 // Engine executes a Query.
 type Engine struct {
 	// Used for tracking running queries.
-	tracker *Tracker
-	metrics *engineMetrics
-	store   storage.Storage
+	tracker  *Tracker
+	metrics  *engineMetrics
+	enforcer *cost.Enforcer
+	store    storage.Storage
 }
 
 // EngineOptions can be used to pass custom flags to engine
@@ -52,12 +55,20 @@ type Query struct {
 }
 
 // NewEngine returns a new instance of QueryExecutor.
-func NewEngine(store storage.Storage, scope tally.Scope) *Engine {
-	return &Engine{
-		tracker: NewTracker(),
-		metrics: newEngineMetrics(scope),
-		store:   store,
+func NewEngine(store storage.Storage, scope tally.Scope, enforcer *cost.Enforcer) *Engine {
+	if enforcer == nil {
+		enforcer = cost.NoopEnforcer()
 	}
+	return &Engine{
+		tracker:  NewTracker(),
+		metrics:  newEngineMetrics(scope),
+		store:    store,
+		enforcer: enforcer,
+	}
+}
+
+func (e *Engine) Enforcer() *cost.Enforcer {
+	return e.enforcer
 }
 
 type engineMetrics struct {
@@ -159,7 +170,7 @@ func (e *Engine) ExecuteExpr(ctx context.Context, parser parser.Parser, opts *En
 
 	result := state.resultNode
 	results <- Query{Result: result}
-	if err := state.Execute(ctx); err != nil {
+	if err := state.Execute(ctx, models.NewQueryContext(e.enforcer)); err != nil {
 		result.abort(err)
 	} else {
 		result.done()

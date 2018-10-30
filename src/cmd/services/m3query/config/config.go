@@ -23,6 +23,8 @@ package config
 import (
 	"time"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	etcdclient "github.com/m3db/m3/src/cluster/client/etcd"
 	"github.com/m3db/m3/src/cmd/services/m3coordinator/ingest"
 	"github.com/m3db/m3/src/cmd/services/m3coordinator/server/m3msg"
@@ -94,6 +96,15 @@ type Configuration struct {
 // LimitsConfiguration represents limitations on per-query resource usage. Zero or negative values imply no limit.
 type LimitsConfiguration struct {
 	MaxComputedDatapoints int64 `yaml:"maxComputedDatapoints"`
+
+	MaxFetchedDatapoints int64 `yaml:"maxFetchedDatapoints"`
+}
+
+func (l *LimitsConfiguration) AsLimitManagerOptions() cost.LimitManagerOptions {
+	return cost.NewLimitManagerOptions().SetDefaultLimit(cost.Limit{
+		Threshold: cost.Cost(l.MaxFetchedDatapoints),
+		Enabled:   l.MaxComputedDatapoints > 0,
+	})
 }
 
 // IngestConfiguration is the configuration for ingestion server.

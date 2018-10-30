@@ -31,6 +31,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	clusterclient "github.com/m3db/m3/src/cluster/client"
 	etcdclient "github.com/m3db/m3/src/cluster/client/etcd"
 	"github.com/m3db/m3/src/cmd/services/m3coordinator/downsample"
@@ -203,7 +205,11 @@ func Run(runOpts RunOptions) {
 		defer cleanup()
 	}
 
-	engine := executor.NewEngine(backendStorage, scope.SubScope("engine"))
+	limitMgr := cost.NewStaticLimitManager(cfg.Limits.AsLimitManagerOptions())
+	tracker := cost.NewTracker()
+	enforcer := cost.NewEnforcer(limitMgr, tracker, cost.NewEnforcerOptions())
+
+	engine := executor.NewEngine(backendStorage, scope.SubScope("engine"), enforcer)
 
 	handler, err := httpd.NewHandler(backendStorage, tagOptions, downsampler, engine,
 		m3dbClusters, clusterClient, cfg, runOpts.DBConfig, scope)

@@ -90,7 +90,9 @@ func (n *FetchNode) Execute(ctx context.Context, queryCtx *models.QueryContext) 
 		End:         endTime,
 		TagMatchers: n.op.Matchers,
 		Interval:    timeSpec.Step,
-	}, &storage.FetchOptions{})
+	}, &storage.FetchOptions{
+		Enforcer: queryCtx.Enforcer,
+	})
 	if err != nil {
 		return err
 	}
