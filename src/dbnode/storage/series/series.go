@@ -94,7 +94,7 @@ func newDatabaseSeries() *dbSeries {
 		blocks: block.NewDatabaseSeriesBlocks(0),
 		bs:     bootstrapNotStarted,
 	}
-	series.buffer = newDatabaseBuffer()
+	series.buffer = newDatabaseBuffer(series.bufferDrained)
 	return series
 }
 
@@ -119,7 +119,6 @@ func (s *dbSeries) Tags() ident.Tags {
 
 func (s *dbSeries) Tick() (TickResult, error) {
 	var r TickResult
-
 	s.Lock()
 
 	bufferResult := s.buffer.Tick()
@@ -387,6 +386,40 @@ func (s *dbSeries) addBlockWithLock(b block.DatabaseBlock) {
 	s.blocks.AddBlock(b)
 }
 
+func (s *dbSeries) bufferDrained(newBlock block.DatabaseBlock) {
+	// NB(r): by the very nature of this method executing we have the
+	// lock already. Executing the drain method occurs during a write if the
+	// buffer needs to drain or if tick is called and series explicitly asks
+	// the buffer to drain ready buckets.
+	iOpts := s.opts.InstrumentOptions()
+	err := s.mergeBlockWithLock(newBlock)
+	if err != nil {
+		iOpts.Logger().WithFields(
+			xlog.NewField("id", s.id.String()),
+			xlog.NewField("blockStart", newBlock.StartTime()),
+			xlog.NewField("err", err.Error()),
+		).Errorf("error trying to drain series buffer")
+		// Allocating metric here is ok because this code-path should never
+		// happen anyways.
+		iOpts.MetricsScope().SubScope("series-buffer-drain").Counter("error").Inc(1)
+	}
+}
+
+func (s *dbSeries) mergeBlockWithLock(newBlock block.DatabaseBlock) error {
+	blockStart := newBlock.StartTime()
+
+	// If we don't have an existing block just insert the new block.
+	existingBlock, ok := s.blocks.BlockAt(blockStart)
+	if !ok {
+		// No existing block, we're safe to just add it.
+		s.addBlockWithLock(newBlock)
+		return nil
+	}
+
+	// There is already an existing block, perform a (lazy) merge.
+	return existingBlock.Merge(newBlock)
+}
+
 // NB(xichen): we are holding a big lock here to drain the in-memory buffer.
 // This could potentially be expensive in that we might accumulate a lot of
 // data in memory during bootstrapping. If that becomes a problem, we could
@@ -517,8 +550,8 @@ func (s *dbSeries) Flush(
 	blockStart time.Time,
 	persistFn persist.DataFn,
 ) (FlushOutcome, error) {
-	s.RLock()
-	defer s.RUnlock()
+	s.Lock()
+	defer s.Unlock()
 
 	if s.bs != bootstrapped {
 		return FlushOutcomeErr, errSeriesNotBootstrapped
@@ -536,7 +569,6 @@ func (s *dbSeries) Snapshot(
 	// state (by performing a pro-active merge).
 	s.Lock()
 	defer s.Unlock()
-
 	if s.bs != bootstrapped {
 		return errSeriesNotBootstrapped
 	}
@@ -559,7 +591,6 @@ func (s *dbSeries) Snapshot(
 	if err != nil {
 		return err
 	}
-
 	return persistFn(s.id, s.tags, segment, digest.SegmentChecksum(segment))
 }
 

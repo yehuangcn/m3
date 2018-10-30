@@ -27,7 +27,6 @@ import (
 	"time"
 
 	"github.com/m3db/m3/src/dbnode/clock"
-	"github.com/m3db/m3/src/dbnode/digest"
 	"github.com/m3db/m3/src/dbnode/encoding"
 	"github.com/m3db/m3/src/dbnode/persist"
 	"github.com/m3db/m3/src/dbnode/storage/block"
@@ -130,12 +129,15 @@ type bufferTickResult struct {
 	mergedOutOfOrderBlocks int
 }
 
-type dbBuffer struct {
-	opts  Options
-	nowFn clock.NowFn
+type databaseBufferDrainFn func(b block.DatabaseBlock)
 
-	bucketCache [cacheSize]*dbBufferBucket
+type dbBuffer struct {
+	opts    Options
+	nowFn   clock.NowFn
+	drainFn databaseBufferDrainFn
+
 	buckets     map[xtime.UnixNano]*dbBufferBucket
+	bucketCache [cacheSize]*dbBufferBucket
 	bucketPool  *dbBufferBucketPool
 
 	blockSize               time.Duration
@@ -146,8 +148,9 @@ type dbBuffer struct {
 
 // NB(prateek): databaseBuffer.Reset(...) must be called upon the returned
 // object prior to use.
-func newDatabaseBuffer() databaseBuffer {
+func newDatabaseBuffer(drainFn databaseBufferDrainFn) databaseBuffer {
 	b := &dbBuffer{
+		drainFn: drainFn,
 		buckets: make(map[xtime.UnixNano]*dbBufferBucket),
 	}
 	return b
@@ -230,24 +233,31 @@ func (b *dbBuffer) Tick() bufferTickResult {
 
 func (b *dbBuffer) Bootstrap(bl block.DatabaseBlock) {
 	blockStart := bl.StartTime()
-	min, max := b.minMaxRealtimeBlockStarts(b.nowFn())
-	isRealtime := !blockStart.Before(min) && !blockStart.After(max)
-
 	bucket, ok := b.bucketAt(blockStart)
 	if !ok {
 		bucket = b.newBucketAt(blockStart)
 	}
 
-	if isRealtime {
-		bucket.bootstrap(bl, realtimeType)
-	} else {
-		bucket.bootstrap(bl, outOfOrderType)
-	}
+	// TODO(juchan): what is a "realtime" bootstrap vs "out of order" bootstrap?
+	bucket.bootstrap(bl, realtimeType)
+	// min, max := b.minMaxRealtimeBlockStarts(b.nowFn())
+	// isRealtime := !blockStart.Before(min) && !blockStart.After(max)
+	// if isRealtime {
+	// 	bucket.bootstrap(bl, realtimeType)
+	// } else {
+	// 	bucket.bootstrap(bl, outOfOrderType)
+	// }
+}
+
+func (b *dbBuffer) minMaxRealtimeBlockStarts(now time.Time) (time.Time, time.Time) {
+	min := now.Add(-b.bufferPast).Truncate(b.blockSize)
+	max := now.Add(b.bufferFuture).Truncate(b.blockSize)
+	return min, max
 }
 
 func (b *dbBuffer) Snapshot(
 	ctx context.Context,
-	mType metricType,
+	mType metricType, //HERE we only want to snapshot realtime metrics for now
 	blockStart time.Time,
 ) (xio.SegmentReader, error) {
 	if bucket, ok := b.bucketAt(blockStart); ok {
@@ -436,8 +446,17 @@ func (b *dbBuffer) Flush(
 	if !exists {
 		return FlushOutcomeBlockDoesNotExist, nil
 	}
+	// By virtue of calling this function, we know we are only interested in
+	// realtime writes. Out of order writes are merged and written directly
+	// by the compactor.
+	res, err := bucket.discardMerged(realtimeType)
+	if err != nil {
+		return FlushOutcomeErr, err
+	}
 
-	stream, err := bucket.stream(ctx, realtimeType)
+	block := res.block
+
+	stream, err := block.Stream(ctx)
 	if err != nil {
 		return FlushOutcomeErr, err
 	}
@@ -447,13 +466,20 @@ func (b *dbBuffer) Flush(
 		return FlushOutcomeErr, err
 	}
 
-	checksum := digest.SegmentChecksum(segment)
+	checksum, err := block.Checksum()
+	if err != nil {
+		return FlushOutcomeErr, err
+	}
 
 	err = persistFn(id, tags, segment, checksum)
 	if err != nil {
 		return FlushOutcomeErr, err
 	}
 
+	// Drain to blocks for it to handle caching
+	b.drainFn(block)
+	//HERE - we only flush realtime data but remove the bucket (which contains
+	// both realtime and out of order data)
 	b.removeBucketAt(blockStart)
 	return FlushOutcomeFlushedToDisk, nil
 }
@@ -477,12 +503,6 @@ func (b *dbBuffer) sortedBucketKeys(ascending bool) []xtime.UnixNano {
 	}
 
 	return keys
-}
-
-func (b *dbBuffer) minMaxRealtimeBlockStarts(now time.Time) (time.Time, time.Time) {
-	min := now.Add(-b.bufferPast).Truncate(b.blockSize)
-	max := now.Add(b.bufferFuture).Truncate(b.blockSize)
-	return min, max
 }
 
 type dbBufferBucket struct {
@@ -787,25 +807,25 @@ type mergeResult struct {
 }
 
 func (b *dbBufferBucket) merge() (mergeResult, error) {
-	if !b.needsMerge() {
-		// Save unnecessary work
-		return mergeResult{}, nil
-	}
+	// if !b.needsMerge() {
+	// 	// Save unnecessary work
+	// 	return mergeResult{}, nil
+	// }
 
 	merges := 0
+	start := b.start
 	bopts := b.opts.DatabaseBlockOptions()
-	encoder := bopts.EncoderPool().Get()
-	encoder.Reset(b.start, bopts.DatabaseBlockAllocSize())
 
 	// Merge realtime and out of order writes separately
 	for mType := 0; mType < numMetricTypes; mType++ {
 		var (
-			start   = b.start
 			readers = make([]xio.SegmentReader, 0, len(b.encoders[mType])+len(b.bootstrapped[mType]))
 			streams = make([]xio.SegmentReader, 0, len(b.encoders[mType]))
 			iter    = b.opts.MultiReaderIteratorPool().Get()
 			ctx     = b.opts.ContextPool().Get()
+			encoder = bopts.EncoderPool().Get()
 		)
+		encoder.Reset(start, bopts.DatabaseBlockAllocSize())
 		defer func() {
 			iter.Close()
 			ctx.Close()
@@ -858,6 +878,30 @@ func (b *dbBufferBucket) merge() (mergeResult, error) {
 	}
 
 	return mergeResult{merges: merges}, nil
+}
+
+type discardMergedResult struct {
+	block  block.DatabaseBlock
+	merges int
+}
+
+func (b *dbBufferBucket) discardMerged(mType metricType) (discardMergedResult, error) {
+	mergeResult, err := b.merge()
+	if err != nil {
+		b.resetEncoders(allMetricTypes)
+		b.resetBootstrapped(allMetricTypes)
+		return discardMergedResult{}, err
+	}
+
+	mergedEncoder := b.encoders[mType][0].encoder
+	newBlock := b.opts.DatabaseBlockOptions().DatabaseBlockPool().Get()
+	blockSize := b.opts.RetentionOptions().BlockSize()
+	newBlock.Reset(b.start, blockSize, mergedEncoder.Discard())
+	if lastRead := b.lastRead(); !lastRead.IsZero() {
+		newBlock.SetLastReadTime(lastRead)
+	}
+
+	return discardMergedResult{newBlock, mergeResult.merges}, nil
 }
 
 func (b *dbBufferBucket) stream(ctx context.Context, mType metricType) (xio.BlockReader, error) {

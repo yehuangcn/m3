@@ -73,7 +73,7 @@ func TestBufferWriteTooFuture(t *testing.T) {
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
 	}))
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 
 	ctx := context.NewContext()
@@ -91,7 +91,7 @@ func TestBufferWriteTooPast(t *testing.T) {
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
 	}))
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 
 	ctx := context.NewContext()
@@ -109,7 +109,7 @@ func TestBufferWritePastFutureOutOfOrderEnabled(t *testing.T) {
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
 	})).SetRetentionOptions(rops)
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 
 	ctx := context.NewContext()
@@ -129,7 +129,7 @@ func TestBufferWriteRead(t *testing.T) {
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
 	}))
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 
 	data := []value{
@@ -161,7 +161,7 @@ func TestBufferReadOnlyMatchingBuckets(t *testing.T) {
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
 	}))
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 
 	data := []value{
@@ -201,7 +201,7 @@ func TestBufferWriteOutOfOrder(t *testing.T) {
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
 	}))
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 
 	data := []value{
@@ -416,7 +416,7 @@ func TestBufferFetchBlocks(t *testing.T) {
 	ctx := opts.ContextPool().Get()
 	defer ctx.Close()
 
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 	buffer.buckets[xtime.ToUnixNano(b.start)] = b
 
@@ -438,7 +438,7 @@ func TestBufferFetchBlocksMetadata(t *testing.T) {
 	start := b.start.Add(-time.Second)
 	end := b.start.Add(time.Second)
 
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 	buffer.buckets[xtime.ToUnixNano(b.start)] = b
 
@@ -467,7 +467,7 @@ func TestBufferTickReordersOutOfOrderBuffers(t *testing.T) {
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
 	}))
-	buffer := newDatabaseBuffer().(*dbBuffer)
+	buffer := newDatabaseBuffer(nil).(*dbBuffer)
 	buffer.Reset(opts)
 
 	// Perform out of order writes that will create two in order encoders
@@ -542,7 +542,7 @@ func TestBufferSnapshot(t *testing.T) {
 		blockSize = rops.BlockSize()
 		curr      = time.Now().Truncate(blockSize)
 		start     = curr
-		buffer    = newDatabaseBuffer().(*dbBuffer)
+		buffer    = newDatabaseBuffer(nil).(*dbBuffer)
 	)
 	opts = opts.SetClockOptions(opts.ClockOptions().SetNowFn(func() time.Time {
 		return curr
