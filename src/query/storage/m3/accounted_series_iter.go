@@ -31,11 +31,11 @@ import (
 type AccountedSeriesIter struct {
 	encoding.SeriesIterator
 
-	enforcer    *cost.Enforcer
+	enforcer    cost.EnforcerIF
 	enforcerErr error
 }
 
-func NewAccountedSeriesIter(wrapped encoding.SeriesIterator, enforcer *cost.Enforcer) *AccountedSeriesIter {
+func NewAccountedSeriesIter(wrapped encoding.SeriesIterator, enforcer cost.EnforcerIF) *AccountedSeriesIter {
 	return &AccountedSeriesIter{
 		SeriesIterator: wrapped,
 		enforcer:       enforcer,
@@ -45,9 +45,9 @@ func NewAccountedSeriesIter(wrapped encoding.SeriesIterator, enforcer *cost.Enfo
 func (as *AccountedSeriesIter) Current() (ts.Datapoint, xtime.Unit, ts.Annotation) {
 	dp, u, a := as.SeriesIterator.Current()
 
-	_, err := as.enforcer.Add(cost.CostableFloat64(1.0))
+	r := as.enforcer.Add(cost.Cost(1.0))
 
-	if err != nil {
+	if err := r.Error; err != nil {
 		as.enforcerErr = err
 	}
 

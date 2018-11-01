@@ -82,7 +82,7 @@ func (q *FetchQuery) String() string {
 type FetchOptions struct {
 	Limit    int
 	KillChan chan struct{}
-	Enforcer *cost.Enforcer
+	Enforcer cost.EnforcerIF
 }
 
 // Querier handles queries against a storage.

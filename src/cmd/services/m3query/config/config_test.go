@@ -23,6 +23,8 @@ package config
 import (
 	"testing"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	xconfig "github.com/m3db/m3x/config"
 
 	"github.com/stretchr/testify/assert"
@@ -49,12 +51,25 @@ func TestTagOptionsFromConfig(t *testing.T) {
 	assert.Equal(t, []byte(name), opts.MetricName())
 }
 
+func TestLimitsConfiguration_AsLimitManagerOptions(t *testing.T) {
+	lc := &LimitsConfiguration{
+		MaxFetchedDatapoints: 5,
+	}
+
+	res := lc.AsLimitManagerOptions()
+	assert.Equal(t, cost.Limit{
+		Threshold: cost.Cost(5),
+		Enabled:   true,
+	}, res.DefaultLimit())
+}
+
 func TestConfigLoading(t *testing.T) {
 	var cfg Configuration
 	require.NoError(t, xconfig.LoadFile(&cfg, "./testdata/sample_config.yml", xconfig.Options{}))
 
 	assert.Equal(t, &LimitsConfiguration{
 		MaxComputedDatapoints: 12000,
+		MaxFetchedDatapoints:  11000,
 	}, &cfg.Limits)
 	// TODO: assert on more fields here.
 }

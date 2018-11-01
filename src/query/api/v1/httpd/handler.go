@@ -26,6 +26,8 @@ import (
 	_ "net/http/pprof" // needed for pprof handler registration
 	"time"
 
+	"github.com/m3db/m3/src/query/api/v1/handler/debug"
+
 	clusterclient "github.com/m3db/m3/src/cluster/client"
 	"github.com/m3db/m3/src/cmd/services/m3coordinator/downsample"
 	dbconfig "github.com/m3db/m3/src/cmd/services/m3dbnode/config"
@@ -199,6 +201,7 @@ func (h *Handler) registerHealthEndpoints() {
 // Endpoints useful for profiling the service
 func (h *Handler) registerProfileEndpoints() {
 	h.Router.PathPrefix("/debug/pprof/").Handler(http.DefaultServeMux)
+	h.Router.Handle(debug.ResourceUsageURL, debug.NewResourceUsageHandler(h.engine)).Methods(debug.ResourceUsageMethod)
 }
 
 // Endpoints useful for viewing routes directory

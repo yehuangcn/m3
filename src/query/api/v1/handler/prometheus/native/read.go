@@ -27,6 +27,8 @@ import (
 	"net/http"
 	"sort"
 
+	"github.com/m3db/m3/src/x/cost"
+
 	"github.com/m3db/m3/src/cmd/services/m3query/config"
 	"github.com/m3db/m3/src/query/api/v1/handler"
 	"github.com/m3db/m3/src/query/block"
@@ -128,7 +130,13 @@ func (h *PromReadHandler) read(
 	ctx, cancel := context.WithTimeout(reqCtx, params.Timeout)
 	defer cancel()
 
-	opts := &executor.EngineOptions{}
+	perQueryEnforcer := cost.NewSubEnforcer(h.engine.Enforcer(),
+		cost.NewEnforcer(cost.NewStaticLimitManager(nil), cost.NewTracker(), cost.NewEnforcerOptions()))
+	defer perQueryEnforcer.Release()
+
+	opts := &executor.EngineOptions{
+		PerQueryEnforcer: perQueryEnforcer,
+	}
 	// Detect clients closing connections
 	abortCh, _ := handler.CloseWatcher(ctx, w)
 	opts.AbortCh = abortCh
@@ -141,6 +149,7 @@ func (h *PromReadHandler) read(
 
 	// Results is closed by execute
 	results := make(chan executor.Query)
+
 	go h.engine.ExecuteExpr(ctx, parser, opts, params, results)
 
 	// Block slices are sorted by start time
@@ -215,7 +224,7 @@ func (h *PromReadHandler) validateRequest(params *models.RequestParams) error {
 	if h.limitsCfg.MaxComputedDatapoints > 0 && numSteps > h.limitsCfg.MaxComputedDatapoints {
 		return fmt.Errorf(
 			"querying from %v to %v with step size %v would result in too many datapoints "+
-				"(end - start / step > %d). Either decrease the query resolution (?step=XX), decrease the time window, " +
+				"(end - start / step > %d). Either decrease the query resolution (?step=XX), decrease the time window, "+
 				"or increase the limit (`limits.maxComputedDatapoints`)",
 			params.Start, params.End, params.Step, h.limitsCfg.MaxComputedDatapoints,
 		)

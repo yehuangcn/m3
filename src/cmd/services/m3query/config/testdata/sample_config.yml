@@ -52,3 +52,4 @@ clusters:
 
 limits:
   maxComputedDatapoints: 12000
+  maxFetchedDatapoints: 11000

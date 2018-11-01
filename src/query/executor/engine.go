@@ -38,7 +38,7 @@ type Engine struct {
 	// Used for tracking running queries.
 	tracker  *Tracker
 	metrics  *engineMetrics
-	enforcer *cost.Enforcer
+	enforcer cost.EnforcerIF
 	store    storage.Storage
 }
 
@@ -46,6 +46,8 @@ type Engine struct {
 type EngineOptions struct {
 	// AbortCh is a channel that signals when results are no longer desired by the caller.
 	AbortCh <-chan bool
+
+	PerQueryEnforcer cost.EnforcerIF
 }
 
 // Query is the result after execution
@@ -55,7 +57,7 @@ type Query struct {
 }
 
 // NewEngine returns a new instance of QueryExecutor.
-func NewEngine(store storage.Storage, scope tally.Scope, enforcer *cost.Enforcer) *Engine {
+func NewEngine(store storage.Storage, scope tally.Scope, enforcer cost.EnforcerIF) *Engine {
 	if enforcer == nil {
 		enforcer = cost.NoopEnforcer()
 	}
@@ -67,7 +69,7 @@ func NewEngine(store storage.Storage, scope tally.Scope, enforcer *cost.Enforcer
 	}
 }
 
-func (e *Engine) Enforcer() *cost.Enforcer {
+func (e *Engine) Enforcer() cost.EnforcerIF {
 	return e.enforcer
 }
 
@@ -170,7 +172,8 @@ func (e *Engine) ExecuteExpr(ctx context.Context, parser parser.Parser, opts *En
 
 	result := state.resultNode
 	results <- Query{Result: result}
-	if err := state.Execute(ctx, models.NewQueryContext(e.enforcer)); err != nil {
+
+	if err := state.Execute(ctx, models.NewQueryContext(opts.PerQueryEnforcer)); err != nil {
 		result.abort(err)
 	} else {
 		result.done()

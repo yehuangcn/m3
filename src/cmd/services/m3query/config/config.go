@@ -103,7 +103,7 @@ type LimitsConfiguration struct {
 func (l *LimitsConfiguration) AsLimitManagerOptions() cost.LimitManagerOptions {
 	return cost.NewLimitManagerOptions().SetDefaultLimit(cost.Limit{
 		Threshold: cost.Cost(l.MaxFetchedDatapoints),
-		Enabled:   l.MaxComputedDatapoints > 0,
+		Enabled:   l.MaxFetchedDatapoints > 0,
 	})
 }
 
