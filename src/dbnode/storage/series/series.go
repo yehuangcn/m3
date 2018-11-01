@@ -381,11 +381,6 @@ func (s *dbSeries) FetchBlocksMetadata(
 	return block.NewFetchBlocksMetadataResult(s.id, tagsIter, res), nil
 }
 
-func (s *dbSeries) addBlockWithLock(b block.DatabaseBlock) {
-	b.SetOnEvictedFromWiredList(s.blockOnEvictedFromWiredList)
-	s.blocks.AddBlock(b)
-}
-
 func (s *dbSeries) bufferDrained(newBlock block.DatabaseBlock) {
 	// NB(r): by the very nature of this method executing we have the
 	// lock already. Executing the drain method occurs during a write if the
@@ -418,6 +413,11 @@ func (s *dbSeries) mergeBlockWithLock(newBlock block.DatabaseBlock) error {
 
 	// There is already an existing block, perform a (lazy) merge.
 	return existingBlock.Merge(newBlock)
+}
+
+func (s *dbSeries) addBlockWithLock(b block.DatabaseBlock) {
+	b.SetOnEvictedFromWiredList(s.blockOnEvictedFromWiredList)
+	s.blocks.AddBlock(b)
 }
 
 // NB(xichen): we are holding a big lock here to drain the in-memory buffer.
@@ -569,6 +569,7 @@ func (s *dbSeries) Snapshot(
 	// state (by performing a pro-active merge).
 	s.Lock()
 	defer s.Unlock()
+
 	if s.bs != bootstrapped {
 		return errSeriesNotBootstrapped
 	}
@@ -591,6 +592,7 @@ func (s *dbSeries) Snapshot(
 	if err != nil {
 		return err
 	}
+
 	return persistFn(s.id, s.tags, segment, digest.SegmentChecksum(segment))
 }
 

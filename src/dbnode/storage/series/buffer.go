@@ -103,8 +103,6 @@ type databaseBuffer interface {
 
 	Bootstrap(bl block.DatabaseBlock)
 
-	Reset(opts Options)
-
 	Stream(
 		ctx context.Context,
 		mType metricType,
@@ -118,6 +116,8 @@ type databaseBuffer interface {
 		tags ident.Tags,
 		persistFn persist.DataFn,
 	) (FlushOutcome, error)
+
+	Reset(opts Options)
 }
 
 type bufferStats struct {
@@ -128,8 +128,6 @@ type bufferStats struct {
 type bufferTickResult struct {
 	mergedOutOfOrderBlocks int
 }
-
-type databaseBufferDrainFn func(b block.DatabaseBlock)
 
 type dbBuffer struct {
 	opts    Options
@@ -145,6 +143,8 @@ type dbBuffer struct {
 	bufferFuture            time.Duration
 	outOfOrderWritesEnabled bool
 }
+
+type databaseBufferDrainFn func(b block.DatabaseBlock)
 
 // NB(prateek): databaseBuffer.Reset(...) must be called upon the returned
 // object prior to use.
@@ -187,7 +187,7 @@ func (b *dbBuffer) Write(
 	if !ok {
 		bucket = b.newBucketAt(blockStart)
 	}
-	b.updateBucketCache(bucket)
+	b.putBucketInCache(bucket)
 	return bucket.write(mType, timestamp, value, unit, annotation)
 }
 
@@ -260,6 +260,10 @@ func (b *dbBuffer) Snapshot(
 	mType metricType, //HERE we only want to snapshot realtime metrics for now
 	blockStart time.Time,
 ) (xio.SegmentReader, error) {
+	if mType == allMetricTypes {
+		return xio.EmptyBlockReader, errInvalidMetricType
+	}
+
 	if bucket, ok := b.bucketAt(blockStart); ok {
 		return bucket.stream(ctx, mType)
 	}
@@ -376,7 +380,7 @@ func (b *dbBuffer) bucketAt(t time.Time) (*dbBufferBucket, bool) {
 	return nil, false
 }
 
-func (b *dbBuffer) updateBucketCache(bg *dbBufferBucket) {
+func (b *dbBuffer) putBucketInCache(bg *dbBufferBucket) {
 	b.bucketCache[b.lruBucketIdxInCache()] = bg
 }
 
